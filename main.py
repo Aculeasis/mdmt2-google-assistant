@@ -26,6 +26,7 @@ from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_
 import logger
 # from languages import LANG_CODE
 from modules_manager import DynamicModule, Say, EQ, Next, ANY
+from utils import FakeFP
 
 NAME = 'google-assistant'
 API = 1
@@ -121,7 +122,7 @@ class Main(threading.Thread):
             return False
 
         model_id, project_id, credentials = data
-        id_, model_id = self._get_device_config(model_id, project_id, credentials)
+        id_, model_id, audio_priority = self._get_device_config(model_id, project_id, credentials)
         if id_ is None:
             return False
 
@@ -134,7 +135,8 @@ class Main(threading.Thread):
             channel=grpc_channel,
             device_model_id=id_,
             device_id=model_id,
-            deadline_sec=DEFAULT_GRPC_DEADLINE
+            deadline_sec=DEFAULT_GRPC_DEADLINE,
+            audio_priority=audio_priority
 
         )
         return True
@@ -170,16 +172,17 @@ class Main(threading.Thread):
         config = self.cfg.load_dict(GA_CONFIG)
         if isinstance(config, dict):
             try:
-                return config['id'], config['model_id']
+                return config['id'], config['model_id'], config['audio_priority']
             except KeyError as e:
                 self.log('Configuration \'{}\' not loaded: {}'.format(GA_CONFIG, e), logger.WARN)
         try:
             config = registry_device(model_id, project_id, credentials)
         except RuntimeError as e:
             self.log(e, logger.CRIT)
-            return None, None
+            return None, None, None
+        config['audio_priority'] = False
         self.cfg.save_dict(GA_CONFIG, config, True)
-        return config['id'], config['model_id']
+        return config['id'], config['model_id'], config['audio_priority']
 
 
 class SampleTextAssistant:
@@ -193,7 +196,7 @@ class SampleTextAssistant:
       deadline_sec: gRPC deadline in seconds for Google Assistant API call.
     """
 
-    def __init__(self, language_code, device_model_id, device_id, channel, deadline_sec):
+    def __init__(self, language_code, device_model_id, device_id, channel, deadline_sec, audio_priority):
         self.language_code = language_code
         self.device_model_id = device_model_id
         self.device_id = device_id
@@ -202,6 +205,7 @@ class SampleTextAssistant:
         self.is_new_conversation = True
         self.assistant = embedded_assistant_pb2_grpc.EmbeddedAssistantStub(channel)
         self.deadline = deadline_sec
+        self.audio_priority = audio_priority
 
     def assist(self, text_query):
         """Send a text request to the Assistant and playback the response.
@@ -209,9 +213,9 @@ class SampleTextAssistant:
         def iter_assist_requests():
             config = embedded_assistant_pb2.AssistConfig(
                 audio_out_config=embedded_assistant_pb2.AudioOutConfig(
-                    encoding='LINEAR16',
+                    encoding='MP3',
                     sample_rate_hertz=16000,
-                    volume_percentage=0,
+                    volume_percentage=100,
                 ),
                 dialog_state_in=embedded_assistant_pb2.DialogStateIn(
                     language_code=self.language_code,
@@ -227,17 +231,23 @@ class SampleTextAssistant:
             # Continue current conversation with later requests.
             self.is_new_conversation = False
             req = embedded_assistant_pb2.AssistRequest(config=config)
-            # assistant_helpers.log_assist_request_without_audio(req)
             yield req
 
         text_response = None
+        audio = None
         for resp in self.assistant.Assist(iter_assist_requests(), self.deadline):
-            # assistant_helpers.log_assist_response_without_audio(resp)
+            if self.audio_priority and resp.HasField('audio_out') and len(resp.audio_out.audio_data) > 0:
+                if audio is None:
+                    audio = FakeFP()
+                audio.write(resp.audio_out.audio_data)
             if resp.dialog_state_out.conversation_state:
                 conversation_state = resp.dialog_state_out.conversation_state
                 self.conversation_state = conversation_state
             if resp.dialog_state_out.supplemental_display_text:
                 text_response = resp.dialog_state_out.supplemental_display_text
+        if audio:
+            audio.close()
+            return lambda : ('<google-assistant-audio><mp3>', audio, '.mp3')
         return text_response
 
 
