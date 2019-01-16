@@ -1,4 +1,4 @@
-# Google Assistant for [mdmTerminal2](https://github.com/Aculeasis/mdmTerminal2)
+# Google Assistant API plugin for mdmTerminal2
 После активации перехватывает все запросы, отправляет их Google Assistant и проговаривает ответы.
 - Активация: `включить Google`.
 - Деактивация: `выключить Google`.
@@ -28,3 +28,7 @@ git clone https://github.com/Aculeasis/mdmt2-google-assistant
 # Особенности
 - Ассистент отвечает на английском, русский не поддерживается.
 - Без `audio_priority` проговаривает любой полученный текст, даже если он не предназначен для этого.
+
+# Ссылки
+- [mdmTerminal2](https://github.com/Aculeasis/mdmTerminal2)
+- [Google Assistant SDK for devices - Python](https://github.com/googlesamples/assistant-sdk-python)
