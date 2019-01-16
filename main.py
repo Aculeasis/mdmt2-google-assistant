@@ -38,8 +38,8 @@ GA_CREDENTIALS = 'google_assistant_credentials'
 DEFAULT_GRPC_DEADLINE = 60 * 3 + 5
 
 PHRASES = {
-    'enable': 'включить Google',
-    'disable': 'выключить Google',
+    'enable': [['включить Google', EQ], ['включи Google', EQ]],
+    'disable': [['выключить Google', EQ], ['выключи Google', EQ]],
     'start_say': 'Google Assistant включен. Для выключения скажите: \'выключить Google\'',
     'stop_say': 'Google Assistant выключен.',
     'error_say': 'Ошибка коммуникации с Google Assistant',
@@ -95,7 +95,7 @@ class Main(threading.Thread):
     def _ga_start(self):
         self.own.extract_module(self._ga_start_callback)
         self.own.insert_module(DynamicModule(self._ga_assist, ANY, ''))
-        self.own.insert_module(DynamicModule(self._ga_stop_callback, ANY, [PHRASES['disable'], EQ]))
+        self.own.insert_module(DynamicModule(self._ga_stop_callback, ANY, PHRASES['disable']))
 
     def _ga_stop_callback(self, *_):
         self._queue.put_nowait('stop')
@@ -104,7 +104,7 @@ class Main(threading.Thread):
     def _ga_stop(self):
         self.own.extract_module(self._ga_assist)
         self.own.extract_module(self._ga_stop_callback)
-        self.own.insert_module(DynamicModule(self._ga_start_callback, ANY, [PHRASES['enable'], EQ]))
+        self.own.insert_module(DynamicModule(self._ga_start_callback, ANY, PHRASES['enable']))
 
     def _ga_assist(self, _, __, phrase):
         text = None
