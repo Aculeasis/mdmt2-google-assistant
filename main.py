@@ -25,7 +25,7 @@ from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_
 
 import logger
 # from languages import LANG_CODE
-from modules_manager import DynamicModule, Say, EQ, Next, ANY
+from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY
 from utils import FakeFP
 
 NAME = 'google-assistant'
@@ -65,8 +65,8 @@ class Main(threading.Thread):
 
     def start(self):
         self._work = True
-        super().start()
         self._ga_stop()
+        super().start()
 
     def reload(self):
         if self._text_assistant:
@@ -107,14 +107,21 @@ class Main(threading.Thread):
         self.own.insert_module(DynamicModule(self._ga_start_callback, ANY, PHRASES['enable']))
 
     def _ga_assist(self, _, __, phrase):
-        text = None
-        if self._text_assistant:
-            try:
-                text = self._text_assistant.assist(phrase)
-            except Exception as e:
-                self.log('Communication error: {}'.format(e), logger.ERROR)
-                text = PHRASES['error_say']
-        return Say(text) if text is not None else Next
+        if not (self._text_assistant and phrase):
+            return Next
+
+        try:
+            response, is_ask, volume = self._text_assistant.assist(phrase)
+        except Exception as e:
+            self.log('Communication error: {}'.format(e), logger.ERROR)
+            return Say(PHRASES['error_say'])
+
+        if volume:
+            self.own.terminal_call('volume', volume)
+            return None
+        if response is None:
+            return Next
+        return Ask(response) if is_ask else Say(response)
 
     def _ga_init(self):
         data = self._read_ga_data()
@@ -233,22 +240,25 @@ class SampleTextAssistant:
             req = embedded_assistant_pb2.AssistRequest(config=config)
             yield req
 
-        text_response = None
-        audio = None
+        response, audio, volume = None, None, None
+        is_ask = False
         for resp in self.assistant.Assist(iter_assist_requests(), self.deadline):
             if self.audio_priority and resp.HasField('audio_out') and len(resp.audio_out.audio_data) > 0:
                 if audio is None:
                     audio = FakeFP()
                 audio.write(resp.audio_out.audio_data)
-            if resp.dialog_state_out.conversation_state:
-                conversation_state = resp.dialog_state_out.conversation_state
-                self.conversation_state = conversation_state
-            if resp.dialog_state_out.supplemental_display_text:
-                text_response = resp.dialog_state_out.supplemental_display_text
+            if resp.HasField('dialog_state_out'):
+                if resp.dialog_state_out.conversation_state:
+                    self.conversation_state = resp.dialog_state_out.conversation_state
+                if resp.dialog_state_out.supplemental_display_text:
+                    response = resp.dialog_state_out.supplemental_display_text
+                if resp.dialog_state_out.volume_percentage:
+                    volume = resp.dialog_state_out.volume_percentage
+                is_ask = resp.dialog_state_out.microphone_mode == embedded_assistant_pb2.DialogStateOut.DIALOG_FOLLOW_ON
         if audio:
             audio.close()
-            return lambda : ('<google-assistant-audio><mp3>', audio, '.mp3')
-        return text_response
+            response = lambda : ('<google-assistant-audio><mp3>', audio, '.mp3')
+        return response, is_ask, volume
 
 
 def registry_device(model_id: str, project_id: str, credentials) -> dict:
