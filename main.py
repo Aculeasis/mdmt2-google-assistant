@@ -24,7 +24,7 @@ import google.oauth2.credentials
 from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_assistant_pb2_grpc
 
 import logger
-# from languages import LANG_CODE
+from languages import LANG_CODE
 from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY
 from utils import FakeFP
 
@@ -57,6 +57,7 @@ class Main(threading.Thread):
         self._work = False
         self.disable = True
         self._models = None
+        self._start_on = False
 
         self._text_assistant = None
 
@@ -66,13 +67,15 @@ class Main(threading.Thread):
 
     def start(self):
         self._work = True
-        self._ga_stop()
+        if self._start_on:
+            self._ga_start()
+        else:
+            self._ga_stop()
         super().start()
 
     def reload(self):
         if self._text_assistant:
-            pass
-            # self._text_assistant.language_code = LANG_CODE.get('IETF')
+            self._text_assistant.language_code = LANG_CODE.get('IETF')
 
     def join(self, _=None):
         self._work = False
@@ -115,11 +118,13 @@ class Main(threading.Thread):
             return Next
 
         try:
-            response, is_ask, volume = self._text_assistant.assist(phrase)
+            response, is_ask, volume, text = self._text_assistant.assist(phrase)
         except Exception as e:
             self.log('Communication error: {}'.format(e), logger.ERROR)
             return Say(PHRASES['error_say'])
 
+        if text is not None:
+            self.log('Display text: {}'.format(repr(text)))
         if volume:
             self.own.terminal_call('volume', volume)
             return None
@@ -137,7 +142,7 @@ class Main(threading.Thread):
         if data is None:
             return False
 
-        id_, model_id, audio_priority, self._models = data
+        id_, model_id, audio_priority, self._models, self._start_on = data
         if not self._models:
             self._models = None
         elif not isinstance(self._models, (list, tuple)):
@@ -147,8 +152,7 @@ class Main(threading.Thread):
         if grpc_channel is None:
             return False
         self._text_assistant = SampleTextAssistant(
-            # language_code=LANG_CODE.get('IETF'),
-            language_code='en-US',
+            language_code=LANG_CODE.get('IETF'),
             channel=grpc_channel,
             device_model_id=id_,
             device_id=model_id,
@@ -186,11 +190,12 @@ class Main(threading.Thread):
         return model_id, project_id, credentials
 
     def _get_device_config(self, model_id: str, project_id: str, credentials):
+        keys = ('id', 'model_id', 'audio_priority', 'models', 'start_on')
         config = self.cfg.load_dict(GA_CONFIG)
         id_ = None
         if isinstance(config, dict):
             try:
-                return config['id'], config['model_id'], config['audio_priority'], config['models']
+                return [config[key] for key in keys]
             except KeyError as e:
                 self.log('Configuration \'{}\' not loaded: {}'.format(GA_CONFIG, e), logger.WARN)
                 id_ = config.get('id')
@@ -201,8 +206,9 @@ class Main(threading.Thread):
             return None
         config['audio_priority'] = True
         config['models'] = None
+        config['start_on'] = False
         self.cfg.save_dict(GA_CONFIG, config, True)
-        return config['id'], config['model_id'], config['audio_priority'], config['models']
+        return [config[key] for key in keys]
 
     def _registry_device(self, id_, model_id: str, project_id: str, credentials) -> dict:
         device_base_url = 'https://{}/v1alpha2/projects/{}/devices'.format(ASSISTANT_API_ENDPOINT, project_id)
@@ -257,7 +263,8 @@ class SampleTextAssistant:
                     volume_percentage=100,
                 ),
                 dialog_state_in=embedded_assistant_pb2.DialogStateIn(
-                    language_code=self.language_code,
+                    # https://github.com/googlesamples/assistant-sdk-python/issues/284
+                    # language_code=self.language_code,
                     conversation_state=self.conversation_state,
                     is_new_conversation=self.is_new_conversation,
                 ),
@@ -272,7 +279,7 @@ class SampleTextAssistant:
             req = embedded_assistant_pb2.AssistRequest(config=config)
             yield req
 
-        response, audio, volume = None, None, None
+        response, audio, volume, text = None, None, None, None
         is_ask = False
         for resp in self.assistant.Assist(iter_assist_requests(), self.deadline):
             if self.audio_priority and resp.HasField('audio_out') and len(resp.audio_out.audio_data) > 0:
@@ -283,14 +290,17 @@ class SampleTextAssistant:
                 if resp.dialog_state_out.conversation_state:
                     self.conversation_state = resp.dialog_state_out.conversation_state
                 if resp.dialog_state_out.supplemental_display_text:
-                    response = resp.dialog_state_out.supplemental_display_text
+                    text = resp.dialog_state_out.supplemental_display_text
                 if resp.dialog_state_out.volume_percentage:
                     volume = resp.dialog_state_out.volume_percentage
                 is_ask = resp.dialog_state_out.microphone_mode == embedded_assistant_pb2.DialogStateOut.DIALOG_FOLLOW_ON
         if audio:
             audio.close()
             response = lambda : ('<google-assistant-audio><mp3>', audio, '.mp3')
-        return response, is_ask, volume
+        else:
+            response = text
+            text = None
+        return response, is_ask, volume, text
 
 
 def device_exists(payload: dict, project_id: str, credentials) -> bool:
