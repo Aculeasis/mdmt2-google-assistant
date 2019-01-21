@@ -1,5 +1,5 @@
-# Google Assistant API plugin for mdmTerminal2
-После активации перехватывает все запросы, отправляет их Google Assistant и проговаривает ответы.
+# Google Assistant Service plugin for mdmTerminal2
+После активации перехватывает все запросы, отправляет их Google Assistant Service и проговаривает ответы.
 - Активация: `включить Google`.
 - Деактивация: `выключить Google`.
 
@@ -23,7 +23,7 @@ git clone https://github.com/Aculeasis/mdmt2-google-assistant
 
 ## Настройки
 Хранятся в `mdmTerminal2/src/data/google_assistant_config.json`:
-- **audio_priority**: Проигрывать аудио полученное через GA API вместо текста. По умолчанию `true`.
+- **audio_priority**: Проигрывать аудио полученное от GAS вместо текста. По умолчанию `true`.
 - **models**: Модель, список моделей или `null`. Если не `null`, плагин будет перехватывать сообщения только при активации
 заданными моделями. По умолчанию `null`.
 - **start_on**: Плагин запустится активированным. По умолчанию `false`.
@@ -34,6 +34,7 @@ git clone https://github.com/Aculeasis/mdmt2-google-assistant
 # Особенности
 - После настройки устройства в Google Home может начать поддерживать русский язык.
 - С `audio_priority: false` проговаривает `supplemental_display_text` предназначенный для вывода на экран.
+- Возможности Google Assistant Service [ограничены](https://developers.google.com/assistant/sdk/overview#features).
 
 # Ссылки
 - [mdmTerminal2](https://github.com/Aculeasis/mdmTerminal2)
