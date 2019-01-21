@@ -56,6 +56,7 @@ class Main(threading.Thread):
         self._queue = queue.Queue()
         self._work = False
         self.disable = True
+        self._models = None
 
         self._text_assistant = None
 
@@ -106,8 +107,11 @@ class Main(threading.Thread):
         self.own.extract_module(self._ga_stop_callback)
         self.own.insert_module(DynamicModule(self._ga_start_callback, ANY, PHRASES['enable']))
 
-    def _ga_assist(self, _, __, phrase):
+    def _ga_assist(self, mm, __, phrase):
         if not (self._text_assistant and phrase):
+            return Next
+
+        if self._models and mm.model not in self._models:
             return Next
 
         try:
@@ -129,9 +133,15 @@ class Main(threading.Thread):
             return False
 
         model_id, project_id, credentials = data
-        id_, model_id, audio_priority = self._get_device_config(model_id, project_id, credentials)
-        if id_ is None:
+        data = self._get_device_config(model_id, project_id, credentials)
+        if data is None:
             return False
+
+        id_, model_id, audio_priority, self._models = data
+        if not self._models:
+            self._models = None
+        elif not isinstance(self._models, (list, tuple)):
+            self._models = (self._models,)
 
         grpc_channel = self._create_grpc_channel(credentials)
         if grpc_channel is None:
@@ -177,19 +187,41 @@ class Main(threading.Thread):
 
     def _get_device_config(self, model_id: str, project_id: str, credentials):
         config = self.cfg.load_dict(GA_CONFIG)
+        id_ = None
         if isinstance(config, dict):
             try:
-                return config['id'], config['model_id'], config['audio_priority']
+                return config['id'], config['model_id'], config['audio_priority'], config['models']
             except KeyError as e:
                 self.log('Configuration \'{}\' not loaded: {}'.format(GA_CONFIG, e), logger.WARN)
+                id_ = config.get('id')
         try:
-            config = registry_device(model_id, project_id, credentials)
+            config = self._registry_device(id_, model_id, project_id, credentials)
         except RuntimeError as e:
             self.log(e, logger.CRIT)
-            return None, None, None
-        config['audio_priority'] = False
+            return None
+        config['audio_priority'] = True
+        config['models'] = None
         self.cfg.save_dict(GA_CONFIG, config, True)
-        return config['id'], config['model_id'], config['audio_priority']
+        return config['id'], config['model_id'], config['audio_priority'], config['models']
+
+    def _registry_device(self, id_, model_id: str, project_id: str, credentials) -> dict:
+        device_base_url = 'https://{}/v1alpha2/projects/{}/devices'.format(ASSISTANT_API_ENDPOINT, project_id)
+        payload = {
+            'id': id_ or '{}-{}'.format(platform.uname().node, uuid.uuid1()),
+            'model_id': model_id,
+            'client_type': 'SDK_SERVICE'
+        }
+        if not device_exists(payload, project_id, credentials):
+            try:
+                session = google.auth.transport.requests.AuthorizedSession(credentials)
+                r = session.post(device_base_url, data=json.dumps(payload))
+            except Exception as e:
+                raise RuntimeError('Failed request to registry device: {}'.format(e))
+            if r.status_code != 200:
+                raise RuntimeError('Failed to register device: {}'.format(r.text))
+            self.log('Registry new device \'{}\'.'.format(payload['id']), logger.INFO)
+        del payload['client_type']
+        return payload
 
 
 class SampleTextAssistant:
@@ -261,19 +293,17 @@ class SampleTextAssistant:
         return response, is_ask, volume
 
 
-def registry_device(model_id: str, project_id: str, credentials) -> dict:
-    device_base_url = 'https://{}/v1alpha2/projects/{}/devices'.format(ASSISTANT_API_ENDPOINT, project_id)
-    payload = {
-        'id': '{}-{}'.format(platform.uname().node, uuid.uuid1()),
-        'model_id': model_id,
-        'client_type': 'SDK_SERVICE'
-    }
+def device_exists(payload: dict, project_id: str, credentials) -> bool:
+    device_url = 'https://{}/v1alpha2/projects/{}/devices/{}'.format(ASSISTANT_API_ENDPOINT, project_id, payload['id'])
     try:
         session = google.auth.transport.requests.AuthorizedSession(credentials)
-        r = session.post(device_base_url, data=json.dumps(payload))
+        r = session.get(device_url)
     except Exception as e:
-        raise RuntimeError('Failed request to registry device: {}'.format(e))
+        raise RuntimeError('Failed request to check exists device: {}'.format(e))
     if r.status_code != 200:
-        raise RuntimeError('Failed to register device: {}'.format(r.text))
-    del payload['client_type']
-    return payload
+        return False
+    try:
+        model_id = r.json()['modelId']
+    except (TypeError, KeyError):
+        return False
+    return payload['model_id'] == model_id
