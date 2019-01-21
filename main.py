@@ -25,7 +25,7 @@ from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_
 
 import logger
 from languages import LANG_CODE
-from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY
+from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY, SW
 from utils import FakeFP
 
 NAME = 'google-assistant'
@@ -58,6 +58,7 @@ class Main(threading.Thread):
         self.disable = True
         self._models = None
         self._start_on = False
+        self._trigger = ''
 
         self._text_assistant = None
 
@@ -98,7 +99,7 @@ class Main(threading.Thread):
 
     def _ga_start(self):
         self.own.extract_module(self._ga_start_callback)
-        self.own.insert_module(DynamicModule(self._ga_assist, ANY, ''))
+        self.own.insert_module(DynamicModule(self._ga_assist, ANY, '' if not self._trigger else [self._trigger, SW]))
         self.own.insert_module(DynamicModule(self._ga_stop_callback, ANY, PHRASES['disable']))
 
     def _ga_stop_callback(self, *_):
@@ -142,7 +143,7 @@ class Main(threading.Thread):
         if data is None:
             return False
 
-        id_, model_id, audio_priority, self._models, self._start_on = data
+        id_, model_id, audio_priority, self._models, self._start_on, self._trigger = data
         if not self._models:
             self._models = None
         elif not isinstance(self._models, (list, tuple)):
@@ -190,7 +191,8 @@ class Main(threading.Thread):
         return model_id, project_id, credentials
 
     def _get_device_config(self, model_id: str, project_id: str, credentials):
-        keys = ('id', 'model_id', 'audio_priority', 'models', 'start_on')
+        keys = ('id', 'model_id', 'audio_priority', 'models', 'start_on', 'trigger')
+        default = {'audio_priority': True, 'models': None, 'start_on': False, 'trigger': ''}
         config = self.cfg.load_dict(GA_CONFIG)
         id_ = None
         if isinstance(config, dict):
@@ -199,14 +201,14 @@ class Main(threading.Thread):
             except KeyError as e:
                 self.log('Configuration \'{}\' not loaded: {}'.format(GA_CONFIG, e), logger.WARN)
                 id_ = config.get('id')
+                for key in [key for key in default if key in config]:
+                    default[key] = config[key]
         try:
             config = self._registry_device(id_, model_id, project_id, credentials)
         except RuntimeError as e:
             self.log(e, logger.CRIT)
             return None
-        config['audio_priority'] = True
-        config['models'] = None
-        config['start_on'] = False
+        config.update(default)
         self.cfg.save_dict(GA_CONFIG, config, True)
         return [config[key] for key in keys]
 
