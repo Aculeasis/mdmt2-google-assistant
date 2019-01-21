@@ -155,8 +155,8 @@ class Main(threading.Thread):
         self._text_assistant = SampleTextAssistant(
             language_code=LANG_CODE.get('IETF'),
             channel=grpc_channel,
-            device_model_id=id_,
-            device_id=model_id,
+            device_model_id=model_id,
+            device_id=id_,
             deadline_sec=DEFAULT_GRPC_DEADLINE,
             audio_priority=audio_priority
 
