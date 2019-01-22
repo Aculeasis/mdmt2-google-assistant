@@ -60,7 +60,7 @@ class Main(threading.Thread):
         self._start_on = False
         self._trigger = ''
 
-        self._text_assistant = None
+        self._assistant = None
 
         if self._ga_init():
             self.disable = False
@@ -75,8 +75,8 @@ class Main(threading.Thread):
         super().start()
 
     def reload(self):
-        if self._text_assistant:
-            self._text_assistant.language_code = LANG_CODE.get('IETF')
+        if self._assistant:
+            self._assistant.language_code = LANG_CODE.get('IETF')
 
     def join(self, _=None):
         self._work = False
@@ -112,14 +112,14 @@ class Main(threading.Thread):
         self.own.insert_module(DynamicModule(self._ga_start_callback, ANY, PHRASES['enable']))
 
     def _ga_assist(self, mm, __, phrase):
-        if not (self._text_assistant and phrase):
+        if not (self._assistant and phrase):
             return Next
 
         if self._models and mm.model not in self._models:
             return Next
 
         try:
-            response, is_ask, volume, text = self._text_assistant.assist(phrase)
+            response, is_ask, volume, text = self._assistant.assist(phrase)
         except Exception as e:
             self.log('Communication error: {}'.format(e), logger.ERROR)
             return Say(PHRASES['error_say'])
@@ -153,7 +153,7 @@ class Main(threading.Thread):
         grpc_channel = self._create_grpc_channel(credentials)
         if grpc_channel is None:
             return False
-        self._text_assistant = SampleTextAssistant(
+        self._assistant = TextAssistant(
             language_code=LANG_CODE.get('IETF'),
             channel=grpc_channel,
             device_model_id=model_id,
@@ -239,7 +239,7 @@ class Main(threading.Thread):
         return payload
 
 
-class SampleTextAssistant:
+class TextAssistant:
     """Sample Assistant that supports text based conversations.
     Args:
       language_code: language for the conversation.
@@ -248,6 +248,7 @@ class SampleTextAssistant:
       channel: authorized gRPC channel for connection to the
         Google Assistant API.
       deadline_sec: gRPC deadline in seconds for Google Assistant API call.
+      audio_priority: return callable audio data instead of text.
     """
 
     def __init__(self, language_code, device_model_id, device_id, channel, deadline_sec, audio_priority):
@@ -262,7 +263,7 @@ class SampleTextAssistant:
         self.audio_priority = audio_priority
 
     def assist(self, text_query):
-        """Send a text request to the Assistant and playback the response.
+        """Send a text request to the Assistant and return the response.
         """
         def iter_assist_requests():
             config = embedded_assistant_pb2.AssistConfig(
