@@ -61,6 +61,7 @@ class Main(threading.Thread):
         self._trigger = ''
 
         self._assistant = None
+        self._is_ask = False
 
         if self._ga_init():
             self.disable = False
@@ -118,8 +119,10 @@ class Main(threading.Thread):
         if self._models and mm.model not in self._models:
             return Next
 
+        # Если ответ на ask не пришел, начинаем новый разговор
+        is_new_conversation = self._is_ask and not mm.code
         try:
-            response, is_ask, volume, text = self._assistant.assist(phrase)
+            response, self._is_ask, volume, text = self._assistant.assist(phrase, is_new_conversation)
         except Exception as e:
             self.log('Communication error: {}'.format(e), logger.ERROR)
             return Say(PHRASES['error_say'])
@@ -131,7 +134,7 @@ class Main(threading.Thread):
             return None
         if response is None:
             return Next
-        return Ask(response) if is_ask else Say(response)
+        return Ask(response) if self._is_ask else Say(response)
 
     def _ga_init(self):
         data = self._read_ga_data()
@@ -262,9 +265,11 @@ class TextAssistant:
         self.deadline = deadline_sec
         self.audio_priority = audio_priority
 
-    def assist(self, text_query):
+    def assist(self, text_query, is_new_conversation=False):
         """Send a text request to the Assistant and return the response.
         """
+        self.is_new_conversation |= is_new_conversation
+
         def iter_assist_requests():
             config = embedded_assistant_pb2.AssistConfig(
                 audio_out_config=embedded_assistant_pb2.AudioOutConfig(
