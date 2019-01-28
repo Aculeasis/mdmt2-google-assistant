@@ -25,6 +25,7 @@ from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_
 
 import logger
 from languages import LANG_CODE
+from lib import volume as volume_
 from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY, SW
 from utils import FakeFP
 
@@ -94,13 +95,20 @@ class Main(threading.Thread):
             elif cmd == 'stop':
                 self._ga_stop()
 
+    def _get_volume(self) -> int:
+        control = self.cfg.gt('volume', 'line_out')
+        if not control or control == volume_.UNDEFINED:
+            return 100
+        volume = volume_.get_volume(control)
+        return volume if volume > -1 else 100
+
     def _ga_start_callback(self, *_):
         self._queue.put_nowait('start')
         return Say(PHRASES['start_say'])
 
     def _ga_start(self):
         self.own.extract_module(self._ga_start_callback)
-        self.own.insert_module(DynamicModule(self._ga_assist, ANY, '' if not self._trigger else [self._trigger, SW]))
+        self.own.insert_module(DynamicModule(self._ga_assist, ANY, self._trigger))
         self.own.insert_module(DynamicModule(self._ga_stop_callback, ANY, PHRASES['disable']))
 
     def _ga_stop_callback(self, *_):
@@ -147,11 +155,18 @@ class Main(threading.Thread):
             return False
 
         id_, model_id, audio_priority, self._models, self._start_on, self._trigger = data
-        self._trigger = self._trigger if not self._models else ''
         if not self._models:
             self._models = None
-        elif not isinstance(self._models, (list, tuple)):
-            self._models = (self._models,)
+            if self._trigger:
+                if not isinstance(self._trigger, (list, tuple)):
+                    self._trigger = [self._trigger]
+                self._trigger = [[x, SW] for x in self._trigger]
+            else:
+                self._trigger = ''
+        else:
+            self._trigger = ''
+            if not isinstance(self._models, (list, tuple)):
+                self._models = (self._models,)
 
         grpc_channel = self._create_grpc_channel(credentials)
         if grpc_channel is None:
@@ -162,8 +177,8 @@ class Main(threading.Thread):
             device_model_id=model_id,
             device_id=id_,
             deadline_sec=DEFAULT_GRPC_DEADLINE,
-            audio_priority=audio_priority
-
+            audio_priority=audio_priority,
+            volume=self._get_volume()
         )
         return True
 
@@ -254,7 +269,7 @@ class TextAssistant:
       audio_priority: return callable audio data instead of text.
     """
 
-    def __init__(self, language_code, device_model_id, device_id, channel, deadline_sec, audio_priority):
+    def __init__(self, language_code, device_model_id, device_id, channel, deadline_sec, audio_priority, volume):
         self.language_code = language_code
         self.device_model_id = device_model_id
         self.device_id = device_id
@@ -264,6 +279,7 @@ class TextAssistant:
         self.assistant = embedded_assistant_pb2_grpc.EmbeddedAssistantStub(channel)
         self.deadline = deadline_sec
         self.audio_priority = audio_priority
+        self.volume = volume
 
     def assist(self, text_query, is_new_conversation=False):
         """Send a text request to the Assistant and return the response.
@@ -275,7 +291,7 @@ class TextAssistant:
                 audio_out_config=embedded_assistant_pb2.AudioOutConfig(
                     encoding='MP3',
                     sample_rate_hertz=16000,
-                    volume_percentage=100,
+                    volume_percentage=self.volume,
                 ),
                 dialog_state_in=embedded_assistant_pb2.DialogStateIn(
                     # https://github.com/googlesamples/assistant-sdk-python/issues/284
@@ -308,6 +324,7 @@ class TextAssistant:
                     text = resp.dialog_state_out.supplemental_display_text
                 if resp.dialog_state_out.volume_percentage:
                     volume = resp.dialog_state_out.volume_percentage
+                    self.volume = volume
                 is_ask = resp.dialog_state_out.microphone_mode == embedded_assistant_pb2.DialogStateOut.DIALOG_FOLLOW_ON
         if audio:
             audio.close()
