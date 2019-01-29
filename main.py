@@ -25,7 +25,6 @@ from google.assistant.embedded.v1alpha2 import embedded_assistant_pb2, embedded_
 
 import logger
 from languages import LANG_CODE
-from lib import volume as volume_
 from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY, SW
 from utils import FakeFP
 
@@ -96,10 +95,7 @@ class Main(threading.Thread):
                 self._ga_stop()
 
     def _get_volume(self) -> int:
-        control = self.cfg.gt('volume', 'line_out')
-        if not control or control == volume_.UNDEFINED:
-            return 100
-        volume = volume_.get_volume(control)
+        volume = self.own.get_volume()
         return volume if volume > -1 else 100
 
     def _ga_start_callback(self, *_):
