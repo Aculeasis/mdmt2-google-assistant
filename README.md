@@ -14,9 +14,14 @@ cp ~/.config/google-oauthlib-tool/credentials.json mdmTerminal2/src/data/google_
 cd mdmTerminal2/src/plugins
 git clone https://github.com/Aculeasis/mdmt2-google-assistant
 ```
-Добавить в файл `mdmTerminal2/src/data/google_assistant_credentials.json` следующие ключи:
+Добавить в файл `mdmTerminal2/src/data/google_assistant_credentials.json` следующие новые ключи:
 - **model_id**:  `Model ID` из Device registration.
-- **project_id**: `Project ID` из настроек проекта.
+- **project_id**: `Project ID` из Project Settings.
+
+В результате файл `google_assistant_credentials.json` должен содержать валидный JSON со следующими ключами:
+```json
+{"refresh_token": "...", "token_uri": "...", "client_id": "...", "client_secret": "...", "scopes": ["..."], "project_id": "...", "model_id": "..."}
+```
 
 И перезапустить терминал.
 
