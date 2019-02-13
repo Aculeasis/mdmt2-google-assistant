@@ -29,7 +29,7 @@ from modules_manager import DynamicModule, Say, Ask, EQ, Next, ANY, SW
 from utils import FakeFP
 
 NAME = 'google-assistant'
-API = 1
+API = 665
 CFG_RELOAD = {'settings': ('lang',)}
 
 ASSISTANT_API_ENDPOINT = 'embeddedassistant.googleapis.com'
