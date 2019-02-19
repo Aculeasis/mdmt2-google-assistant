@@ -26,7 +26,7 @@ git clone https://github.com/Aculeasis/mdmt2-google-assistant
 И перезапустить терминал.
 
 ## Настройка
-Хранятся в `mdmTerminal2/src/data/google_assistant_config.json`:
+Хранятся в `mdmTerminal2/src/data/google_assistant_config.json`, файл будет создан при первом запуске:
 - **audio_priority**: Проигрывать аудио полученное от GAS вместо текста. По умолчанию `true`.
 - **models**: Модель, список моделей или `null`. Если не `null`, плагин будет перехватывать сообщения только при активации
 заданными моделями игнорируя `trigger`. По умолчанию `null`.
