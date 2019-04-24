@@ -6,6 +6,7 @@
 # Установка
 - [Configure the Actions Console project and the Google account](https://developers.google.com/assistant/sdk/guides/service/python/embed/config-dev-project-and-account)
 - [Register a new device model and download the client secrets file](https://developers.google.com/assistant/sdk/guides/service/python/embed/register-device)
+- Для поддержки русского языка: В [консоли](https://console.actions.google.com/) `Project settings` -> `LANGUAGES` выбрать русский язык.
 
 ```
 mdmTerminal2/env/bin/python -m pip install --upgrade google-auth-oauthlib[tool] google-assistant-grpc
@@ -36,7 +37,6 @@ git clone https://github.com/Aculeasis/mdmt2-google-assistant
 По умолчанию `""`. Можно использовать список фраз, например `trigger: ["google", "гугл", "печенька"]`.
 
 # Особенности
-- После настройки устройства в Google Home может начать поддерживать русский язык.
 - С `audio_priority: false` проговаривает `supplemental_display_text` предназначенный для вывода на экран.
 - Возможности Google Assistant Service [ограничены](https://developers.google.com/assistant/sdk/overview#features).
 
