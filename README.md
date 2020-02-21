@@ -4,6 +4,14 @@
 - Деактивация: `выключить Google`.
 
 # Установка
+Если у вас уже есть `google_assistant_credentials.json` (от старого\другого терминала), то просто поместите его в папку `mdmTerminal2/src/data/`. Потом установите зависимости и клонируйте реп:
+```
+mdmTerminal2/env/bin/python -m pip install --upgrade google-auth-oauthlib[tool] google-assistant-grpc
+cd mdmTerminal2/src/plugins
+git clone https://github.com/Aculeasis/mdmt2-google-assistant
+```
+---
+
 - [Configure the Actions Console project and the Google account](https://developers.google.com/assistant/sdk/guides/service/python/embed/config-dev-project-and-account)
 - [Register a new device model and download the client secrets file](https://developers.google.com/assistant/sdk/guides/service/python/embed/register-device)
 - Для поддержки русского языка: В [консоли](https://console.actions.google.com/) `Project settings` -> `LANGUAGES` выбрать русский язык.
