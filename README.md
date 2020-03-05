@@ -11,6 +11,12 @@ cd mdmTerminal2/src/plugins
 git clone https://github.com/Aculeasis/mdmt2-google-assistant
 ```
 ---
+### Только для armv6l (Raspberry Pi Zero W)
+Перед установкой нужно собрать пакет `grpcio` из исходников, установка бинарного пакета приведет к ошибке **Illegal Instruction** [issue#235](https://github.com/googlesamples/assistant-sdk-python/issues/235):
+```
+mdmTerminal2/env/bin/python -m pip install --upgrade --no-binary :all: grpcio
+```
+---
 
 - [Configure the Actions Console project and the Google account](https://developers.google.com/assistant/sdk/guides/service/python/embed/config-dev-project-and-account)
 - [Register a new device model and download the client secrets file](https://developers.google.com/assistant/sdk/guides/service/python/embed/register-device)
